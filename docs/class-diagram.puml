@@ -1,0 +1,111 @@
+@startuml
+title Multi-Channel Notification Gateway - Bridge pattern
+left to right direction
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+package "Abstraction Side" {
+  abstract class Notification <<Abstraction>> {
+    # sender : MessageSender
+    + setSender(sender : MessageSender) : void
+    + getSender() : MessageSender
+    {abstract} + send(recipient : String, message : String) : void
+    # deliverOrThrow(recipient : String, title : String, body : String) : void
+  }
+
+  class UrgentNotification <<Refined Abstraction>> {
+    - fallbackSenders : List<MessageSender>
+    + addFallback(sender : MessageSender) : void
+    + send(recipient : String, message : String) : void
+  }
+
+  class EncryptedNotification <<Refined Abstraction>> {
+    - key : byte[]
+    + send(recipient : String, message : String) : void
+    + encrypt(text : String) : String
+    + decrypt(text : String) : String
+  }
+
+  class ScheduledBatchNotification <<Refined Abstraction>> {
+    - recipients : List<String>
+    - scheduledFor : LocalDateTime
+    + send(audience : String, message : String) : void
+    + sendBatch(audience : String, message : String) : BatchReport
+  }
+
+  class MarketingNotification <<Refined Abstraction>> {
+    - campaign : String
+    + send(recipient : String, message : String) : void
+  }
+}
+
+package "Implementor Side" {
+  interface MessageSender <<Implementor>> {
+    + sendMessage(recipient : String, title : String, body : String) : boolean
+    + isAvailable() : boolean
+    + getChannelName() : String
+  }
+
+  abstract class AbstractSimulatedSender {
+    - available : boolean
+    + isAvailable() : boolean
+    + setAvailable(available : boolean) : void
+    + markUnreachable(recipient : String) : void
+    + getChannelName() : String
+  }
+
+  note bottom of AbstractSimulatedSender
+    Helper class for code reuse,
+    not a role of the pattern
+  end note
+
+  class TelegramMessageSender <<Concrete Implementor>> {
+    + sendMessage(recipient : String, title : String, body : String) : boolean
+  }
+
+  class EmailMessageSender <<Concrete Implementor>> {
+    + sendMessage(recipient : String, title : String, body : String) : boolean
+  }
+
+  class SmsMessageSender <<Concrete Implementor>> {
+    - maxLength : int
+    + sendMessage(recipient : String, title : String, body : String) : boolean
+  }
+
+  class KafkaEventSender <<Concrete Implementor>> {
+    - topic : String
+    + sendMessage(recipient : String, title : String, body : String) : boolean
+  }
+
+  class PushNotificationSender <<Concrete Implementor>> {
+    + sendMessage(recipient : String, title : String, body : String) : boolean
+  }
+}
+
+class BatchReport <<record>> {
+  + total : int
+  + successful : int
+  + failed : int
+  + failedRecipients : List<String>
+}
+
+' Bridge
+Notification "*" o-- "1" MessageSender : sender (Bridge, has-a)
+
+' Abstraction hierarchy
+Notification <|-- UrgentNotification
+Notification <|-- EncryptedNotification
+Notification <|-- ScheduledBatchNotification
+Notification <|-- MarketingNotification
+
+' Implementor hierarchy
+MessageSender <|.. AbstractSimulatedSender
+AbstractSimulatedSender <|-- TelegramMessageSender
+AbstractSimulatedSender <|-- EmailMessageSender
+AbstractSimulatedSender <|-- SmsMessageSender
+AbstractSimulatedSender <|-- KafkaEventSender
+AbstractSimulatedSender <|-- PushNotificationSender
+
+' Other
+ScheduledBatchNotification ..> BatchReport : returns
+@enduml
